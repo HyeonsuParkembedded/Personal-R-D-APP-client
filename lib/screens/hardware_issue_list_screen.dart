@@ -5,6 +5,7 @@ import '../models/hardware_issue.dart';
 import '../models/enums.dart';
 import '../repositories/hardware_issue_repository.dart';
 import '../services/api_client.dart';
+import '../utils/responsive_layout.dart';
 
 class HardwareIssueListScreen extends StatefulWidget {
   final int projectId;
@@ -386,8 +387,9 @@ class _HardwareIssueListScreenState extends State<HardwareIssueListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('${widget.projectName} 하드웨어 이슈')),
-      body: Column(
-        children: [
+      body: AdaptiveContainer(
+        child: Column(
+          children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: SegmentedButton<String>(
@@ -526,6 +528,7 @@ class _HardwareIssueListScreenState extends State<HardwareIssueListScreen> {
             ),
           ),
         ],
+      ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showIssueForm(),

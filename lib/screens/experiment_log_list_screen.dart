@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import '../models/experiment_log.dart';
 import '../repositories/experiment_log_repository.dart';
 import '../services/api_client.dart';
+import '../utils/responsive_layout.dart';
 
 class ExperimentLogListScreen extends StatefulWidget {
   final int projectId;
@@ -262,8 +263,9 @@ class _ExperimentLogListScreenState extends State<ExperimentLogListScreen> {
       appBar: AppBar(
         title: Text('${widget.projectName} 실험 로그'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => _refreshLogs(),
+      body: AdaptiveContainer(
+        child: RefreshIndicator(
+          onRefresh: () async => _refreshLogs(),
         child: FutureBuilder<List<ExperimentLogRead>>(
           future: _logsFuture,
           builder: (context, snapshot) {
@@ -325,6 +327,7 @@ class _ExperimentLogListScreenState extends State<ExperimentLogListScreen> {
             );
           },
         ),
+      ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showLogForm(),

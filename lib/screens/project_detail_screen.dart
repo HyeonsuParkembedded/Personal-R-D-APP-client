@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import '../models/project.dart';
 import '../models/enums.dart';
 import '../repositories/project_repository.dart';
+import '../utils/responsive_layout.dart';
 import 'gitlab_dashboard_screen.dart';
 import 'github_dashboard_screen.dart';
 import 'link_repository_screen.dart';
 import 'experiment_log_list_screen.dart';
 import 'hardware_issue_list_screen.dart';
+import '../services/github_service.dart';
+import '../services/gitlab_service.dart';
+import '../services/settings_service.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -21,6 +25,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   late Future<ProjectActivitySummary> _summaryFuture;
   late Future<List<TimelineEvent>> _timelineFuture;
 
+  final _githubService = GitHubService();
+  final _gitlabService = GitLabService();
+  final _settingsService = SettingsService();
+
   @override
   void initState() {
     super.initState();
@@ -30,8 +38,123 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void _loadData() {
     setState(() {
       _summaryFuture = _repository.getProjectSummary(widget.projectId);
-      _timelineFuture = _repository.getProjectTimeline(widget.projectId);
+      _timelineFuture = _fetchMergedTimeline();
     });
+  }
+
+  Future<List<TimelineEvent>> _fetchMergedTimeline() async {
+    // 1. Fetch local events
+    final localEvents = await _repository.getProjectTimeline(widget.projectId);
+    
+    // 2. Fetch the summary to know attached repos
+    final summary = await _repository.getProjectSummary(widget.projectId);
+    
+    // 3. Fetch remote commits in parallel for ALL branches
+    final githubToken = await _settingsService.getGithubToken();
+    final gitlabToken = await _settingsService.getGitlabToken();
+    
+    final remoteEventFutures = <Future<List<TimelineEvent>>>[];
+    
+    for (final repo in summary.repositories) {
+      if (repo.platform.name == 'github' && githubToken != null && githubToken.isNotEmpty) {
+        final owner = repo.owner;
+        final name = repo.name.contains('/') ? repo.name.split('/').last : repo.name;
+        
+        remoteEventFutures.add(_githubService.getRepoBranches(owner, name, githubToken).then((branches) async {
+          final branchCommitFutures = branches.map((branch) => 
+            _githubService.getRepoCommits(owner, name, githubToken, sha: branch)
+          );
+          
+          final nestedCommits = await Future.wait(branchCommitFutures);
+          // Flatten lists of GitHubCommit into TimelineEvent
+          final allTimelineEvents = <TimelineEvent>[];
+          final seenShas = <String>{}; // For deduplication across branches
+          
+          for (final commits in nestedCommits) {
+            for (final c in commits) {
+              if (!seenShas.contains(c.sha)) {
+                seenShas.add(c.sha);
+                allTimelineEvents.add(TimelineEvent(
+                  eventType: 'github_commit',
+                  title: 'Commit by ${c.authorName}',
+                  description: c.message,
+                  occurredAt: c.createdAt,
+                  projectId: widget.projectId,
+                  sourceId: 0,
+                ));
+              }
+            }
+          }
+          return allTimelineEvents;
+        }).catchError((_) => <TimelineEvent>[]));
+
+      } else if (repo.platform.name == 'gitlab' && gitlabToken != null && gitlabToken.isNotEmpty) {
+        final path = Uri.encodeComponent('${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}');
+        
+        remoteEventFutures.add(_gitlabService.getProjectBranches(path, gitlabToken).then((branches) async {
+          final branchCommitFutures = branches.map((branch) => 
+            _gitlabService.getProjectCommits(path, gitlabToken, refName: branch)
+          );
+          
+          final nestedCommits = await Future.wait(branchCommitFutures);
+          // Flatten lists of GitLabCommit into TimelineEvent
+          final allTimelineEvents = <TimelineEvent>[];
+          final seenIds = <String>{}; // Deduplication
+          
+          for (final commits in nestedCommits) {
+            for (final c in commits) {
+              if (!seenIds.contains(c.id)) {
+                seenIds.add(c.id);
+                allTimelineEvents.add(TimelineEvent(
+                  eventType: 'gitlab_commit',
+                  title: 'Commit by ${c.authorName}',
+                  description: c.message,
+                  occurredAt: c.createdAt,
+                  projectId: widget.projectId,
+                  sourceId: 0,
+                ));
+              }
+            }
+          }
+          return allTimelineEvents;
+        }).catchError((_) => <TimelineEvent>[]));
+      }
+    }
+    
+    final remoteEventLists = await Future.wait(remoteEventFutures);
+    
+    // 4. Merge and sort
+    final allEvents = <TimelineEvent>[...localEvents];
+    for (final list in remoteEventLists) {
+      allEvents.addAll(list);
+    }
+    
+    // Add Experiment Logs
+    for (final log in summary.latestExperimentLogs) {
+      allEvents.add(TimelineEvent(
+        eventType: 'experiment_log',
+        title: log.title,
+        description: log.objective,
+        occurredAt: log.createdAt,
+        projectId: widget.projectId,
+        sourceId: log.id,
+      ));
+    }
+    
+    // Add Hardware Issues
+    for (final issue in summary.openHardwareIssues) {
+      allEvents.add(TimelineEvent(
+        eventType: 'hardware_issue',
+        title: issue.title,
+        description: issue.symptoms,
+        occurredAt: issue.createdAt,
+        projectId: widget.projectId,
+        sourceId: issue.id,
+      ));
+    }
+    
+    allEvents.sort((a, b) => b.occurredAt.compareTo(a.occurredAt)); // Descending
+    return allEvents;
   }
 
   Future<void> _showEditDialog(ProjectDetail project) async {
@@ -206,51 +329,53 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           final summary = snapshot.data!;
           final project = summary.project;
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // ---- Action buttons row ----
-              Row(
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _showEditDialog(project),
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('수정'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final linked = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              LinkRepositoryScreen(projectId: widget.projectId),
-                        ),
-                      );
-                      if (linked == true) _loadData();
-                    },
-                    icon: const Icon(Icons.add_link, size: 18),
-                    label: const Text('저장소 연결'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+          final isDesktop = ResponsiveLayout.isDesktop(context);
 
-              // ---- Header ----
-              Text(
-                project.name,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+          final leftContent = <Widget>[
+            // ---- Action buttons row ----
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _showEditDialog(project),
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('수정'),
                 ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final linked = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            LinkRepositoryScreen(projectId: widget.projectId),
+                      ),
+                    );
+                    if (linked == true) _loadData();
+                  },
+                  icon: const Icon(Icons.add_link, size: 18),
+                  label: const Text('저장소 연결'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ---- Header ----
+            Text(
+              project.name,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 8),
-              Text(
-                project.description.isEmpty ? '설명이 없습니다.' : project.description,
-                style: const TextStyle(fontSize: 16, color: Colors.black54),
-              ),
-              const SizedBox(height: 16),
-              Chip(
+            ),
+            const SizedBox(height: 8),
+            Text(
+              project.description.isEmpty ? '설명이 없습니다.' : project.description,
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Chip(
                 label: Text(
                   project.status.label,
                   style: const TextStyle(
@@ -264,178 +389,216 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              const Divider(height: 32),
+            ),
+            const Divider(height: 32),
 
-              // ---- Stats ----
+            // ---- Stats ----
+            const Text(
+              '상태 요약',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatCard('저장소', summary.repositoryCount),
+                _buildStatCard(
+                  '실험 로그',
+                  summary.experimentLogCount,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ExperimentLogListScreen(
+                          projectId: widget.projectId,
+                          projectName: project.name,
+                        ),
+                      ),
+                    );
+                    _loadData();
+                  },
+                ),
+                _buildStatCard(
+                  '미해결 이슈',
+                  summary.hardwareIssueCount,
+                  color: summary.openHardwareIssues.isNotEmpty
+                      ? Colors.red.shade100
+                      : null,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HardwareIssueListScreen(
+                          projectId: widget.projectId,
+                          projectName: project.name,
+                        ),
+                      ),
+                    );
+                    _loadData();
+                  },
+                ),
+              ],
+            ),
+            const Divider(height: 32),
+
+            // ---- GitLab Dashboard buttons ----
+            if (summary.repositories.any(
+              (r) => r.platform.name == 'gitlab',
+            )) ...[
               const Text(
-                '상태 요약',
+                'GitLab 연동',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatCard('저장소', summary.repositoryCount),
-                  _buildStatCard(
-                    '실험 로그',
-                    summary.experimentLogCount,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExperimentLogListScreen(
-                            projectId: widget.projectId,
-                            projectName: project.name,
-                          ),
-                        ),
-                      );
-                      _loadData();
-                    },
-                  ),
-                  _buildStatCard(
-                    '미해결 이슈',
-                    summary.hardwareIssueCount,
-                    color: summary.openHardwareIssues.isNotEmpty
-                        ? Colors.red.shade100
-                        : null,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => HardwareIssueListScreen(
-                            projectId: widget.projectId,
-                            projectName: project.name,
-                          ),
-                        ),
-                      );
-                      _loadData();
-                    },
-                  ),
-                ],
-              ),
-              const Divider(height: 32),
-
-              // ---- GitLab Dashboard buttons ----
-              if (summary.repositories.any(
-                (r) => r.platform.name == 'gitlab',
-              )) ...[
-                const Text(
-                  'GitLab 연동',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                ...summary.repositories
-                    .where((r) => r.platform.name == 'gitlab')
-                    .map(
-                      (repo) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.source,
-                          color: Colors.deepOrange,
-                        ),
-                        title: Text('${repo.owner}/${repo.name}'),
-                        subtitle: const Text('이슈, 마일스톤 관리'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            FilledButton.tonal(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => GitLabDashboardScreen(
-                                      projectPath: Uri.encodeComponent(
+              const SizedBox(height: 8),
+              ...summary.repositories
+                  .where((r) => r.platform.name == 'gitlab')
+                  .map(
+                    (repo) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.source,
+                        color: Colors.deepOrange,
+                      ),
+                      title: Text('${repo.owner}/${repo.name}'),
+                      subtitle: const Text('이슈, 마일스톤 관리'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton.tonal(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => GitLabDashboardScreen(
+                                    projectPath: Uri.encodeComponent(
+                                      '${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}',
+                                    ),
+                                    repoDisplayName:
                                         '${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}',
-                                      ),
-                                      repoDisplayName:
-                                          '${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}',
-                                    ),
                                   ),
-                                );
-                              },
-                              child: const Text('대시보드'),
+                                ),
+                              );
+                            },
+                            child: const Text('대시보드'),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.link_off,
+                              color: Colors.red,
                             ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.link_off,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => _confirmUnlinkRepo(repo.id),
-                              tooltip: '연동 해제',
-                            ),
-                          ],
-                        ),
+                            onPressed: () => _confirmUnlinkRepo(repo.id),
+                            tooltip: '연동 해제',
+                          ),
+                        ],
                       ),
                     ),
-                const Divider(height: 32),
-              ],
+                  ),
+              const Divider(height: 32),
+            ],
 
-              // ---- GitHub Dashboard buttons ----
-              if (summary.repositories.any(
-                (r) => r.platform.name == 'github',
-              )) ...[
-                const Text(
-                  'GitHub 연동',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                ...summary.repositories
-                    .where((r) => r.platform.name == 'github')
-                    .map(
-                      (repo) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.source,
-                          color: Colors.black87,
-                        ),
-                        title: Text('${repo.owner}/${repo.name}'),
-                        subtitle: const Text('이슈, 마일스톤 관리'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            FilledButton.tonal(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => GitHubDashboardScreen(
-                                      owner: repo.owner,
-                                      repo: repo.name.contains('/')
-                                          ? repo.name.split('/').last
-                                          : repo.name,
-                                      repoDisplayName:
-                                          '${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}',
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: const Text('대시보드'),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.link_off,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => _confirmUnlinkRepo(repo.id),
-                              tooltip: '연동 해제',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                const Divider(height: 32),
-              ],
-
-              // ---- Timeline ----
+            // ---- GitHub Dashboard buttons ----
+            if (summary.repositories.any(
+              (r) => r.platform.name == 'github',
+            )) ...[
               const Text(
-                '최근 타임라인',
+                'GitHub 연동',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 12),
-              _buildTimelineSection(),
+              const SizedBox(height: 8),
+              ...summary.repositories
+                  .where((r) => r.platform.name == 'github')
+                  .map(
+                    (repo) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.source,
+                        color: Colors.black87,
+                      ),
+                      title: Text('${repo.owner}/${repo.name}'),
+                      subtitle: const Text('이슈, 마일스톤 관리'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton.tonal(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => GitHubDashboardScreen(
+                                    owner: repo.owner,
+                                    repo: repo.name.contains('/')
+                                        ? repo.name.split('/').last
+                                        : repo.name,
+                                    repoDisplayName:
+                                        '${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}',
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('대시보드'),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.link_off,
+                              color: Colors.red,
+                            ),
+                            onPressed: () => _confirmUnlinkRepo(repo.id),
+                            tooltip: '연동 해제',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              const Divider(height: 32),
             ],
+          ];
+
+          final rightContent = <Widget>[
+            // ---- Timeline ----
+            const Text(
+              '최근 타임라인',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildTimelineSection(),
+          ];
+
+          if (isDesktop) {
+            return AdaptiveContainer(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: ListView(
+                        children: leftContent,
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                    Expanded(
+                      flex: 4,
+                      child: ListView(
+                        children: rightContent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return AdaptiveContainer(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                ...leftContent,
+                ...rightContent,
+              ],
+            ),
           );
         },
       ),

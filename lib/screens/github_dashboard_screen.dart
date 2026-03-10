@@ -5,6 +5,7 @@ import '../models/github_commit.dart';
 import '../models/github_member.dart';
 import '../services/github_service.dart';
 import '../services/settings_service.dart';
+import '../utils/responsive_layout.dart';
 
 class GitHubDashboardScreen extends StatefulWidget {
   final String owner;
@@ -75,16 +76,10 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
       return;
     }
     try {
-      final results = await Future.wait([
-        _loadIssues(),
-        _loadMilestones(),
-        _loadCommits(),
-        _loadMembers(),
-        _githubService.getRepoBranches(widget.owner, widget.repo, _token!),
-      ]);
+      final branches = await _githubService.getRepoBranches(widget.owner, widget.repo, _token!);
       if (mounted) {
         setState(() {
-          _branches = results[3] as List<String>;
+          _branches = branches;
           if (_branches.isNotEmpty && _selectedBranch == null) {
             // Try to default to 'main' or 'master' if available
             if (_branches.contains('main')) {
@@ -97,6 +92,13 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
           }
         });
       }
+      
+      await Future.wait([
+        _loadIssues(),
+        _loadMilestones(),
+        _loadCommits(),
+        _loadMembers(),
+      ]);
     } catch (e) {
       print('GitHub init error: $e');
     }
@@ -686,33 +688,138 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = ResponsiveLayout.isDesktop(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.repoDisplayName, overflow: TextOverflow.ellipsis),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.bug_report), text: '이슈'),
-            Tab(icon: Icon(Icons.flag), text: '마일스톤'),
-            Tab(icon: Icon(Icons.timeline), text: '활동'),
-            Tab(icon: Icon(Icons.group), text: '팀원'),
-          ],
-        ),
+        bottom: isDesktop
+            ? null
+            : TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.bug_report), text: '이슈'),
+                  Tab(icon: Icon(Icons.flag), text: '마일스톤'),
+                  Tab(icon: Icon(Icons.timeline), text: '활동'),
+                  Tab(icon: Icon(Icons.group), text: '팀원'),
+                ],
+              ),
       ),
-      floatingActionButton: _tabController.index < 2
+      floatingActionButton: !isDesktop && _tabController.index < 2
           ? FloatingActionButton.extended(
               onPressed: _onFab,
               icon: const Icon(Icons.add),
-              label: Text(_tabController.index == 0 ? '새 이슈' : '새 마일스톤'),
+              label: Text(_tabController.index == 0 ? '새 이슈' : '새 이벤트'),
             )
           : null,
-      body: TabBarView(
+      body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
+    );
+  }
+
+  Widget _buildDesktopSection(
+    String title,
+    Widget child, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Card(
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                if (actionLabel != null && onAction != null)
+                  TextButton.icon(
+                    onPressed: onAction,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: Text(actionLabel),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return AdaptiveContainer(
+      child: TabBarView(
         controller: _tabController,
         children: [
           _issuesTab(),
           _milestonesTab(),
           _commitsTab(),
           _membersTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left side: Issues, Milestones, and Members
+          Expanded(
+            flex: 5,
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _buildDesktopSection(
+                    '이슈 (Issues)',
+                    _issuesTab(),
+                    actionLabel: '새 이슈',
+                    onAction: _showIssueForm,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  flex: 2,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _buildDesktopSection(
+                          '마일스톤 (Milestones)',
+                          _milestonesTab(),
+                          actionLabel: '새 마일스톤',
+                          onAction: _showMilestoneForm,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: _buildDesktopSection(
+                          '팀원 (Team)',
+                          _membersTab(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Right side: Commits Timeline
+          Expanded(
+            flex: 4,
+            child: _buildDesktopSection('활동 타임라인 (Commits)', _commitsTab()),
+          ),
         ],
       ),
     );
@@ -907,6 +1014,7 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
             onRefresh: _loadCommits,
             emptyText: '최근 활동이 없습니다.',
             itemCount: _commits.length,
+            forceList: true,
             itemBuilder: (i) {
               final commit = _commits[i];
               final isFirst = i == 0;
@@ -1032,6 +1140,7 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
     required String emptyText,
     required int itemCount,
     required Widget Function(int) itemBuilder,
+    bool forceList = false,
   }) {
     if (loading) return const Center(child: CircularProgressIndicator());
     if (error != null) {
@@ -1055,10 +1164,38 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
     if (itemCount == 0) return Center(child: Text(emptyText));
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
-      child: ListView.separated(
-        itemCount: itemCount,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) => itemBuilder(i),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isLarge = constraints.maxWidth >= 600;
+          if (isLarge && !forceList) {
+            return GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 500,
+                mainAxisExtent: 90,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: itemCount,
+              itemBuilder: (_, i) => Card(
+                elevation: 1,
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                child: Center(child: itemBuilder(i)),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: itemCount,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (_, i) => itemBuilder(i),
+          );
+        },
       ),
     );
   }
