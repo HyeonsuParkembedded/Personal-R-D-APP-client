@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 
 import 'screens/project_list_screen.dart';
+import 'services/api_client.dart';
+import 'services/settings_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Custom Backend URL 로드
+  final String? customUrl = await SettingsService().getBackendUrl();
+  if (customUrl != null && customUrl.isNotEmpty) {
+    ApiClient().setBaseUrl(customUrl);
+  }
+
   runApp(const LabPilotApp());
 }
 

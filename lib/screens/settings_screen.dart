@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_client.dart';
 import '../services/settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -12,6 +13,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _githubController = TextEditingController();
   final _gitlabController = TextEditingController();
+  final _backendController = TextEditingController();
   final _settingsService = SettingsService();
 
   bool _githubObscure = true;
@@ -28,9 +30,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadTokens() async {
     final github = await _settingsService.getGithubToken();
     final gitlab = await _settingsService.getGitlabToken();
+    final backend = await _settingsService.getBackendUrl();
     setState(() {
       _githubController.text = github ?? '';
       _gitlabController.text = gitlab ?? '';
+      _backendController.text = backend ?? '';
       _loading = false;
     });
   }
@@ -40,6 +44,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _saving = true);
     await _settingsService.saveGithubToken(_githubController.text);
     await _settingsService.saveGitlabToken(_gitlabController.text);
+    await _settingsService.saveBackendUrl(_backendController.text);
+    
+    // 즉시 ApiClient 에 반영
+    ApiClient().setBaseUrl(_backendController.text);
+    
     setState(() => _saving = false);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,6 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _githubController.dispose();
     _gitlabController.dispose();
+    _backendController.dispose();
     super.dispose();
   }
 
@@ -99,6 +109,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // ---------- Backend URL ----------
+                    _sectionLabel(
+                      icon: Icons.dns,
+                      label: 'LabPilot Backend Server URL',
+                      hint: '빈칸으로 두면 기본 로컬 주소(127.0.0.1 또는 10.0.2.2)를 사용합니다.\n예: http://192.168.1.100:8000',
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _backendController,
+                      decoration: InputDecoration(
+                        hintText: 'http://서버주소:8000',
+                        prefixIcon: const Icon(Icons.link),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        filled: true,
                       ),
                     ),
                     const SizedBox(height: 32),

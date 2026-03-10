@@ -54,24 +54,19 @@ class GitLabService {
     String projectId,
     String token, {
     String state = 'opened', // opened | closed | all
+    int page = 1,
   }) async {
     final issues = <GitLabIssue>[];
-    int page = 1;
-    while (true) {
-      final uri = Uri.parse(
-          '$_baseUrl/projects/$projectId/issues?state=$state&per_page=50&page=$page');
-      final response = await http.get(uri, headers: _headers(token));
-      if (response.statusCode != 200) {
-        throw Exception(
-            'GitLab Issues error ${response.statusCode}: ${response.body}');
-      }
-      final List<dynamic> data = jsonDecode(response.body);
-      if (data.isEmpty) break;
-      for (final i in data) {
-        issues.add(GitLabIssue.fromJson(i as Map<String, dynamic>));
-      }
-      if (data.length < 50) break;
-      page++;
+    final uri = Uri.parse(
+        '$_baseUrl/projects/$projectId/issues?state=$state&per_page=50&page=$page');
+    final response = await http.get(uri, headers: _headers(token));
+    if (response.statusCode != 200) {
+      throw Exception(
+          'GitLab Issues error ${response.statusCode}: ${response.body}');
+    }
+    final List<dynamic> data = jsonDecode(response.body);
+    for (final i in data) {
+      issues.add(GitLabIssue.fromJson(i as Map<String, dynamic>));
     }
     return issues;
   }
@@ -130,9 +125,10 @@ class GitLabService {
     String projectId,
     String token, {
     String state = 'active', // active | closed | all (no statistics in 'all')
+    int page = 1,
   }) async {
     final uri = Uri.parse(
-        '$_baseUrl/projects/$projectId/milestones?state=$state&per_page=50&with_stats=true');
+        '$_baseUrl/projects/$projectId/milestones?state=$state&per_page=50&page=$page&with_stats=true');
     final response = await http.get(uri, headers: _headers(token));
     if (response.statusCode != 200) {
       throw Exception(

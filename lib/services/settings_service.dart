@@ -7,6 +7,21 @@ class SettingsService {
 
   static const _keyGithub = 'github_token';
   static const _keyGitlab = 'gitlab_token';
+  static const _keyBackendUrl = 'backend_url';
+
+  Future<String?> getBackendUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyBackendUrl);
+  }
+
+  Future<void> saveBackendUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (url.trim().isEmpty) {
+      await prefs.remove(_keyBackendUrl);
+    } else {
+      await prefs.setString(_keyBackendUrl, url.trim());
+    }
+  }
 
   Future<String?> getGithubToken() async {
     final prefs = await SharedPreferences.getInstance();

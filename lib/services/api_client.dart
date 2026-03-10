@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, SocketException;
 import 'package:flutter/foundation.dart';
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
 
-  late final String baseUrl;
+  late String baseUrl;
   final http.Client _client = http.Client();
 
   ApiClient._internal() {
@@ -20,11 +20,35 @@ class ApiClient {
     }
   }
 
+  void setBaseUrl(String url) {
+    if (url.trim().isEmpty) {
+      if (!kIsWeb && Platform.isAndroid) {
+        baseUrl = 'http://10.0.2.2:8000/api';
+      } else {
+        baseUrl = 'http://127.0.0.1:8000/api';
+      }
+      return;
+    }
+    String formatted = url.trim();
+    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+      formatted = 'http://$formatted';
+    }
+    if (formatted.endsWith('/')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    if (!formatted.endsWith('/api')) {
+      formatted = '$formatted/api';
+    }
+    baseUrl = formatted;
+  }
+
   Future<dynamic> get(String endpoint) async {
     final uri = Uri.parse('$baseUrl$endpoint');
     try {
       final response = await _client.get(uri);
       return _handleResponse(response);
+    } on SocketException {
+      throw ApiException('서버에 연결할 수 없습니다. 오프라인 상태이거나 서버가 다운되었는지 확인해주세요.');
     } catch (e) {
       throw ApiException('Failed to connect to backend: $e');
     }
@@ -39,6 +63,8 @@ class ApiClient {
         body: body != null ? jsonEncode(body) : null,
       );
       return _handleResponse(response);
+    } on SocketException {
+      throw ApiException('서버에 연결할 수 없습니다. 오프라인 상태이거나 서버가 다운되었는지 확인해주세요.');
     } catch (e) {
       throw ApiException('Failed to connect to backend: $e');
     }
@@ -55,6 +81,8 @@ class ApiClient {
         body: body != null ? jsonEncode(body) : null,
       );
       return _handleResponse(response);
+    } on SocketException {
+      throw ApiException('서버에 연결할 수 없습니다. 오프라인 상태이거나 서버가 다운되었는지 확인해주세요.');
     } catch (e) {
       throw ApiException('Failed to connect to backend: $e');
     }
@@ -71,6 +99,8 @@ class ApiClient {
           body: response.body,
         );
       }
+    } on SocketException {
+      throw ApiException('서버에 연결할 수 없습니다. 오프라인 상태이거나 서버가 다운되었는지 확인해주세요.');
     } catch (e) {
       throw ApiException('Failed to connect to backend: $e');
     }
@@ -86,6 +116,8 @@ class ApiClient {
       final response = await http.Response.fromStream(streamedResponse);
       
       return _handleResponse(response);
+    } on SocketException {
+      throw ApiException('서버에 연결할 수 없습니다. 오프라인 상태이거나 서버가 다운되었는지 확인해주세요.');
     } catch (e) {
       throw ApiException('Failed to upload file: $e');
     }

@@ -32,21 +32,33 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
   // Issues state
   List<GitLabIssue> _issues = [];
   bool _issuesLoading = true;
+  bool _issuesLoadingMore = false;
+  int _issuesPage = 1;
+  bool _issuesHasMore = true;
   String? _issuesError;
   String _issueFilter = 'opened'; // opened | closed | all
+  final ScrollController _issuesScrollController = ScrollController();
 
   // Milestones state
   List<GitLabMilestone> _milestones = [];
   bool _milestonesLoading = true;
+  bool _milestonesLoadingMore = false;
+  int _milestonesPage = 1;
+  bool _milestonesHasMore = true;
   String? _milestonesError;
   String _milestoneFilter = 'active'; // active | closed | all
+  final ScrollController _milestonesScrollController = ScrollController();
 
   // Commits state
   List<GitLabCommit> _commits = [];
   bool _commitsLoading = true;
+  bool _commitsLoadingMore = false;
+  int _commitsPage = 1;
+  bool _commitsHasMore = true;
   String? _commitsError;
   List<String> _branches = [];
   String? _selectedBranch;
+  final ScrollController _commitsScrollController = ScrollController();
 
   // Members state
   List<GitLabMember> _members = [];
@@ -60,6 +72,25 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) _loadCurrent();
     });
+
+    _issuesScrollController.addListener(() {
+      if (_issuesScrollController.position.pixels >= _issuesScrollController.position.maxScrollExtent - 200 && !_issuesLoadingMore && _issuesHasMore) {
+        _loadMoreIssues();
+      }
+    });
+
+    _milestonesScrollController.addListener(() {
+      if (_milestonesScrollController.position.pixels >= _milestonesScrollController.position.maxScrollExtent - 200 && !_milestonesLoadingMore && _milestonesHasMore) {
+        _loadMoreMilestones();
+      }
+    });
+
+    _commitsScrollController.addListener(() {
+      if (_commitsScrollController.position.pixels >= _commitsScrollController.position.maxScrollExtent - 200 && !_commitsLoadingMore && _commitsHasMore) {
+        _loadMoreCommits();
+      }
+    });
+
     _init();
   }
 
@@ -118,16 +149,20 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
     setState(() {
       _issuesLoading = true;
       _issuesError = null;
+      _issuesPage = 1;
+      _issuesHasMore = true;
     });
     try {
       final list = await _gitLabService.getProjectIssues(
         widget.projectPath,
         _token!,
         state: _issueFilter,
+        page: _issuesPage,
       );
       setState(() {
         _issues = list;
         _issuesLoading = false;
+        _issuesHasMore = list.length >= 50;
       });
     } catch (e) {
       setState(() {
@@ -137,21 +172,49 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
     }
   }
 
+  Future<void> _loadMoreIssues() async {
+    if (_token == null || _issuesLoadingMore || !_issuesHasMore) return;
+    setState(() => _issuesLoadingMore = true);
+    try {
+      _issuesPage++;
+      final list = await _gitLabService.getProjectIssues(
+        widget.projectPath,
+        _token!,
+        state: _issueFilter,
+        page: _issuesPage,
+      );
+      setState(() {
+        _issues.addAll(list);
+        _issuesLoadingMore = false;
+        _issuesHasMore = list.length >= 50;
+      });
+    } catch (e) {
+      setState(() {
+        _issuesError = e.toString();
+        _issuesLoadingMore = false;
+      });
+    }
+  }
+
   Future<void> _loadMilestones() async {
     if (_token == null) return;
     setState(() {
       _milestonesLoading = true;
       _milestonesError = null;
+      _milestonesPage = 1;
+      _milestonesHasMore = true;
     });
     try {
       final list = await _gitLabService.getProjectMilestones(
         widget.projectPath,
         _token!,
         state: _milestoneFilter,
+        page: _milestonesPage,
       );
       setState(() {
         _milestones = list;
         _milestonesLoading = false;
+        _milestonesHasMore = list.length >= 50;
       });
     } catch (e) {
       setState(() {
@@ -161,26 +224,78 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
     }
   }
 
+  Future<void> _loadMoreMilestones() async {
+    if (_token == null || _milestonesLoadingMore || !_milestonesHasMore) return;
+    setState(() => _milestonesLoadingMore = true);
+    try {
+      _milestonesPage++;
+      final list = await _gitLabService.getProjectMilestones(
+        widget.projectPath,
+        _token!,
+        state: _milestoneFilter,
+        page: _milestonesPage,
+      );
+      setState(() {
+        _milestones.addAll(list);
+        _milestonesLoadingMore = false;
+        _milestonesHasMore = list.length >= 50;
+      });
+    } catch (e) {
+      setState(() {
+        _milestonesError = e.toString();
+        _milestonesLoadingMore = false;
+      });
+    }
+  }
+
   Future<void> _loadCommits() async {
     if (_token == null) return;
     setState(() {
       _commitsLoading = true;
       _commitsError = null;
+      _commitsPage = 1;
+      _commitsHasMore = true;
     });
     try {
       final list = await _gitLabService.getProjectCommits(
         widget.projectPath,
         _token!,
         refName: _selectedBranch,
+        page: _commitsPage,
       );
       setState(() {
         _commits = list;
         _commitsLoading = false;
+        _commitsHasMore = list.length >= 50;
       });
     } catch (e) {
       setState(() {
         _commitsError = e.toString();
         _commitsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMoreCommits() async {
+    if (_token == null || _commitsLoadingMore || !_commitsHasMore) return;
+    setState(() => _commitsLoadingMore = true);
+    try {
+      _commitsPage++;
+      final list = await _gitLabService.getProjectCommits(
+        widget.projectPath,
+        _token!,
+        refName: _selectedBranch,
+        page: _commitsPage,
+      );
+      setState(() {
+        _commits.addAll(list);
+        _commitsLoadingMore = false;
+        _commitsHasMore = list.length >= 50;
+      });
+    } catch (e) {
+      setState(() {
+        _commitsError = e.toString();
+        _commitsLoadingMore = false;
       });
     }
   }
@@ -211,6 +326,9 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _issuesScrollController.dispose();
+    _milestonesScrollController.dispose();
+    _commitsScrollController.dispose();
     super.dispose();
   }
 
@@ -893,6 +1011,8 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
             onRefresh: _loadIssues,
             emptyText: '이슈가 없습니다.',
             itemCount: _issues.length,
+            scrollController: _issuesScrollController,
+            loadingMore: _issuesLoadingMore,
             itemBuilder: (i) {
               final issue = _issues[i];
               return ListTile(
@@ -942,6 +1062,8 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
             onRefresh: _loadMilestones,
             emptyText: '마일스톤이 없습니다.',
             itemCount: _milestones.length,
+            scrollController: _milestonesScrollController,
+            loadingMore: _milestonesLoadingMore,
             itemBuilder: (i) {
               final ms = _milestones[i];
               final total = ms.totalIssues;
@@ -1016,6 +1138,8 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
     required int itemCount,
     required Widget Function(int) itemBuilder,
     bool forceList = false,
+    ScrollController? scrollController,
+    bool loadingMore = false,
   }) {
     if (loading) {
       return const Center(child: CircularProgressIndicator());
@@ -1048,6 +1172,7 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
           final isLarge = constraints.maxWidth >= 600;
           if (isLarge && !forceList) {
             return GridView.builder(
+              controller: scrollController,
               padding: const EdgeInsets.all(12),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 500,
@@ -1055,24 +1180,31 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
-              itemCount: itemCount,
-              itemBuilder: (_, i) => Card(
-                elevation: 1,
-                margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: Center(child: itemBuilder(i)),
-              ),
+              itemCount: itemCount + (loadingMore ? 1 : 0),
+              itemBuilder: (_, i) {
+                if (i == itemCount) return const Center(child: CircularProgressIndicator());
+                return Card(
+                  elevation: 1,
+                  margin: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Center(child: itemBuilder(i)),
+                );
+              },
             );
           }
 
           return ListView.separated(
+            controller: scrollController,
             padding: EdgeInsets.zero,
-            itemCount: itemCount,
+            itemCount: itemCount + (loadingMore ? 1 : 0),
             separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (_, i) => itemBuilder(i),
+            itemBuilder: (_, i) {
+              if (i == itemCount) return const Padding(padding: EdgeInsets.all(16.0), child: Center(child: CircularProgressIndicator()));
+              return itemBuilder(i);
+            },
           );
         },
       ),
@@ -1136,6 +1268,8 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
             emptyText: '최근 활동이 없습니다.',
             itemCount: _commits.length,
             forceList: true,
+            scrollController: _commitsScrollController,
+            loadingMore: _commitsLoadingMore,
             itemBuilder: (i) {
               final commit = _commits[i];
               final isFirst = i == 0;

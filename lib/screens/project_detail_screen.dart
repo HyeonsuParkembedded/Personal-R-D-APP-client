@@ -61,7 +61,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         final name = repo.name.contains('/') ? repo.name.split('/').last : repo.name;
         
         remoteEventFutures.add(_githubService.getRepoBranches(owner, name, githubToken).then((branches) async {
-          final branchCommitFutures = branches.map((branch) => 
+          // Safeguard: Limit to the first 3 branches to prevent API Rate Limit Errors
+          final targetBranches = branches.take(3).toList();
+          final branchCommitFutures = targetBranches.map((branch) => 
             _githubService.getRepoCommits(owner, name, githubToken, sha: branch)
           );
           
@@ -92,7 +94,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         final path = Uri.encodeComponent('${repo.owner}/${repo.name.contains('/') ? repo.name.split('/').last : repo.name}');
         
         remoteEventFutures.add(_gitlabService.getProjectBranches(path, gitlabToken).then((branches) async {
-          final branchCommitFutures = branches.map((branch) => 
+          // Safeguard: Limit to the first 3 branches to prevent API Rate Limit Errors
+          final targetBranches = branches.take(3).toList();
+          final branchCommitFutures = targetBranches.map((branch) => 
             _gitlabService.getProjectCommits(path, gitlabToken, refName: branch)
           );
           

@@ -65,9 +65,10 @@ class GitHubService {
     String repo,
     String token, {
     String state = 'open', // open | closed | all
+    int page = 1,
   }) async {
     final uri = Uri.parse(
-      '$_baseUrl/repos/$owner/$repo/issues?state=$state&per_page=100',
+      '$_baseUrl/repos/$owner/$repo/issues?state=$state&per_page=50&page=$page',
     );
     final response = await http.get(uri, headers: _headers(token));
 
@@ -152,9 +153,10 @@ class GitHubService {
     String repo,
     String token, {
     String state = 'open', // open | closed | all
+    int page = 1,
   }) async {
     final uri = Uri.parse(
-      '$_baseUrl/repos/$owner/$repo/milestones?state=$state&per_page=100',
+      '$_baseUrl/repos/$owner/$repo/milestones?state=$state&per_page=50&page=$page',
     );
     final response = await http.get(uri, headers: _headers(token));
 
@@ -272,10 +274,11 @@ class GitHubService {
     String repo,
     String token, {
     String? sha,
+    int page = 1,
   }) async {
     final query = sha != null ? '&sha=$sha' : '';
     final uri =
-        Uri.parse('$_baseUrl/repos/$owner/$repo/commits?per_page=50$query');
+        Uri.parse('$_baseUrl/repos/$owner/$repo/commits?per_page=50&page=$page$query');
     print('GitHubService: GET $uri');
     final response = await http.get(uri, headers: _headers(token));
 
