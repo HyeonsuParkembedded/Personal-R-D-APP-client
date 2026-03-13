@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import '../models/remote_repo.dart';
 import '../models/github_issue.dart';
 import '../models/github_milestone.dart';
@@ -279,18 +280,18 @@ class GitHubService {
     final query = sha != null ? '&sha=$sha' : '';
     final uri =
         Uri.parse('$_baseUrl/repos/$owner/$repo/commits?per_page=50&page=$page$query');
-    print('GitHubService: GET $uri');
+    debugPrint('GitHubService: GET $uri');
     final response = await http.get(uri, headers: _headers(token));
 
     if (response.statusCode != 200) {
-      print('GitHubService Error ${response.statusCode}: ${response.body}');
+      debugPrint('GitHubService Error ${response.statusCode}: ${response.body}');
       throw Exception(
         'GitHub Commits error ${response.statusCode}: ${response.body}',
       );
     }
 
     final List<dynamic> data = jsonDecode(response.body);
-    print('GitHubService: Parsed ${data.length} commit JSON objects');
+    debugPrint('GitHubService: Parsed ${data.length} commit JSON objects');
     return data
         .map((c) => GitHubCommit.fromJson(c as Map<String, dynamic>))
         .toList();

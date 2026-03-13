@@ -131,7 +131,7 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
         _loadMembers(),
       ]);
     } catch (e) {
-      print('GitHub init error: $e');
+      debugPrint('GitHub init error: $e');
     }
   }
 
@@ -263,7 +263,7 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
       _commitsPage = 1;
       _commitsHasMore = true;
     });
-    print('GitHub: Loading commits for ${widget.owner}/${widget.repo}');
+    debugPrint('GitHub: Loading commits for ${widget.owner}/${widget.repo}');
     try {
       final list = await _githubService.getRepoCommits(
         widget.owner,
@@ -272,14 +272,14 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
         sha: _selectedBranch,
         page: _commitsPage,
       );
-      print('GitHub: Fetched ${list.length} commits');
+      debugPrint('GitHub: Fetched ${list.length} commits');
       setState(() {
         _commits = list;
         _commitsLoading = false;
         _commitsHasMore = list.length >= 50;
       });
     } catch (e) {
-      print('GitHub: Commit fetch error: $e');
+      debugPrint('GitHub: Commit fetch error: $e');
       setState(() {
         _commitsError = e.toString();
         _commitsLoading = false;
@@ -663,6 +663,7 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
                           onPressed: () async {
                             final ok = await _confirmDelete(ctx, '마일스톤');
                             if (ok) {
+                              if (!ctx.mounted) return;
                               Navigator.pop(ctx);
                               await _deleteMilestone(existing);
                             }
@@ -1362,14 +1363,16 @@ class _CommitGraphPainter extends CustomPainter {
     final centerX = size.width / 2;
     const centerY = 24.0;
 
-    if (!isFirst)
+    if (!isFirst) {
       canvas.drawLine(Offset(centerX, 0), Offset(centerX, centerY), paint);
-    if (!isLast)
+    }
+    if (!isLast) {
       canvas.drawLine(
         Offset(centerX, centerY),
         Offset(centerX, size.height),
         paint,
       );
+    }
 
     canvas.drawCircle(Offset(centerX, centerY), 5, dotPaint);
     canvas.drawCircle(Offset(centerX, centerY), 8, paint..strokeWidth = 1);

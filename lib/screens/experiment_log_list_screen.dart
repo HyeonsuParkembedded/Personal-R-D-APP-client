@@ -205,6 +205,7 @@ class _ExperimentLogListScreenState extends State<ExperimentLogListScreen> {
                         );
                         if (confirm == true) {
                           await _repository.deleteLog(existing.id);
+                          if (!ctx.mounted) return;
                           Navigator.pop(ctx, true);
                         }
                       },
@@ -239,6 +240,7 @@ class _ExperimentLogListScreenState extends State<ExperimentLogListScreen> {
                           await _repository.uploadAttachment(existing.id, selectedImagePath!);
                         }
                       }
+                      if (!ctx.mounted) return;
                       Navigator.pop(ctx, true);
                     },
                     child: const Text('저장'),

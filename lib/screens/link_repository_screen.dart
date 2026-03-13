@@ -274,7 +274,7 @@ class _LinkRepositoryScreenState extends State<LinkRepositoryScreen>
         final repo = repos[i];
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: accentColor.withOpacity(0.1),
+            backgroundColor: accentColor.withAlpha(25), // 0.1 opacity
             child: Icon(icon, color: accentColor, size: 20),
           ),
           title: Text(

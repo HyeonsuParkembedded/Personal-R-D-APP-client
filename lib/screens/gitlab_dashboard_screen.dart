@@ -128,7 +128,7 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
         _loadMembers(),
       ]);
     } catch (e) {
-      print('GitLab init error: $e');
+      debugPrint('GitLab init error: $e');
     }
   }
 
@@ -457,6 +457,7 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
                           onPressed: () async {
                             final ok = await _confirmDelete(ctx, '이슈');
                             if (ok) {
+                              if (!ctx.mounted) return;
                               Navigator.pop(ctx);
                               await _deleteIssue(existing);
                             }
@@ -669,6 +670,7 @@ class _GitLabDashboardScreenState extends State<GitLabDashboardScreen>
                           onPressed: () async {
                             final ok = await _confirmDelete(ctx, '마일스톤');
                             if (ok) {
+                              if (!ctx.mounted) return;
                               Navigator.pop(ctx);
                               await _deleteMilestone(existing);
                             }

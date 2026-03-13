@@ -307,6 +307,7 @@ class _HardwareIssueListScreenState extends State<HardwareIssueListScreen> {
                           );
                           if (confirm == true) {
                             await _repository.deleteIssue(existing.id);
+                            if (!ctx.mounted) return;
                             Navigator.pop(ctx, true);
                           }
                         },
@@ -356,12 +357,12 @@ class _HardwareIssueListScreenState extends State<HardwareIssueListScreen> {
                               );
                             }
                           }
-                          if (!mounted) return;
+                          if (!ctx.mounted) return;
                           Navigator.pop(ctx, true);
                         } catch (e) {
-                          if (!mounted) return;
+                          if (!ctx.mounted) return;
                           ScaffoldMessenger.of(
-                            context,
+                            ctx,
                           ).showSnackBar(SnackBar(content: Text('실패: $e')));
                         }
                       },

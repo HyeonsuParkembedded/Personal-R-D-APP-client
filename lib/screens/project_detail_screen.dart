@@ -297,6 +297,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         await _repository.deleteRepository(widget.projectId, repoId);
         _loadData();
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('연동 해제 실패: $e')));
