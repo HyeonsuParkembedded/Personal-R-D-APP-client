@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/settings_service.dart';
+import '../utils/responsive_layout.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -78,9 +79,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
+          : AdaptiveContainer(
+              child: SingleChildScrollView(
+                padding: ResponsiveLayout.responsivePadding(context),
+                child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,6 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+          ),
     );
   }
 

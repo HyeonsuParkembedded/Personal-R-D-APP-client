@@ -4,6 +4,7 @@ import '../repositories/project_repository.dart';
 import '../services/github_service.dart';
 import '../services/gitlab_service.dart';
 import '../services/settings_service.dart';
+import '../utils/responsive_layout.dart';
 
 class LinkRepositoryScreen extends StatefulWidget {
   final int projectId;
@@ -164,8 +165,9 @@ class _LinkRepositoryScreenState extends State<LinkRepositoryScreen>
           ],
         ),
       ),
-      body: Column(
-        children: [
+      body: AdaptiveContainer(
+        child: Column(
+          children: [
           // Search bar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -205,7 +207,8 @@ class _LinkRepositoryScreenState extends State<LinkRepositoryScreen>
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

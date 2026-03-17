@@ -64,6 +64,7 @@ class _HardwareIssueListScreenState extends State<HardwareIssueListScreen> {
     final bool? saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      constraints: ResponsiveLayout.bottomSheetConstraints(context),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(

@@ -334,7 +334,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           final summary = snapshot.data!;
           final project = summary.project;
 
-          final isDesktop = ResponsiveLayout.isDesktop(context);
+          final isWide = ResponsiveLayout.isWideLayout(context);
 
           final leftContent = <Widget>[
             // ---- Action buttons row ----
@@ -570,7 +570,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             _buildTimelineSection(),
           ];
 
-          if (isDesktop) {
+          if (isWide) {
             return AdaptiveContainer(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),

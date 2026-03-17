@@ -810,12 +810,12 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = ResponsiveLayout.isDesktop(context);
+    final isWide = ResponsiveLayout.isWideLayout(context);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.repoDisplayName, overflow: TextOverflow.ellipsis),
-        bottom: isDesktop
+        bottom: isWide
             ? null
             : TabBar(
                 controller: _tabController,
@@ -827,14 +827,14 @@ class _GitHubDashboardScreenState extends State<GitHubDashboardScreen>
                 ],
               ),
       ),
-      floatingActionButton: !isDesktop && _tabController.index < 2
+      floatingActionButton: !isWide && _tabController.index < 2
           ? FloatingActionButton.extended(
               onPressed: _onFab,
               icon: const Icon(Icons.add),
               label: Text(_tabController.index == 0 ? '새 이슈' : '새 이벤트'),
             )
           : null,
-      body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
+      body: isWide ? _buildDesktopLayout() : _buildMobileLayout(),
     );
   }
 

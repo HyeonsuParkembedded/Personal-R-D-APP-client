@@ -49,6 +49,7 @@ class _ExperimentLogListScreenState extends State<ExperimentLogListScreen> {
     final bool? saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      constraints: ResponsiveLayout.bottomSheetConstraints(context),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
