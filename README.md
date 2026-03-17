@@ -104,6 +104,7 @@ flutter run -d windows
 |------|----------|
 | Android 에뮬레이터 | `http://10.0.2.2:8000/api` |
 | Windows / Linux 데스크탑 | `http://127.0.0.1:8000/api` |
+| 운영 서버 (Synology NAS) | `https://rnd.hyunsu5203.synology.me/api` |
 
 앱 내 **Settings 화면**에서 백엔드 URL을 직접 변경할 수 있습니다.
 변경된 URL은 SharedPreferences에 저장되어 재실행 후에도 유지됩니다.
