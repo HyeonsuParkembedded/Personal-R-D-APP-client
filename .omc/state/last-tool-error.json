@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"git add .env.prod README.md && git commit -m \\\"$(cat <<'EOF'\\nSet production CORS origin to rnd.hyunsu5203.synology.me\\n\\n- .env.prod: ALLOWED_HOSTS and ALLOWED_ORIGINS set to production d...",
-  "error": "Exit code 128\nfatal: '.env.prod' 경로명세가 어떤 파일과도 일치하지 않습니다",
-  "timestamp": "2026-03-17T14:53:49.674Z",
-  "retry_count": 1
-}
