@@ -1,6 +1,7 @@
 name: CD
 
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -52,10 +53,12 @@ jobs:
         run: flutter pub get
 
       - name: Decode keystore
+        if: github.event_name != 'pull_request'
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/labpilot-release.jks
 
       - name: Create key.properties
+        if: github.event_name != 'pull_request'
         run: |
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
             "${{ secrets.STORE_PASSWORD }}" \
@@ -64,12 +67,34 @@ jobs:
             "../labpilot-release.jks" \
             > android/key.properties
 
-      - name: Build APK (release)
+      - name: Build APK (release, signed)
+        if: github.event_name != 'pull_request'
         run: flutter build apk --release
+
+      - name: Build APK (debug, PR only)
+        if: github.event_name == 'pull_request'
+        run: flutter build apk --debug
+
+      - name: Report APK size
+        run: |
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            APK=build/app/outputs/flutter-apk/app-release.apk
+          else
+            APK=build/app/outputs/flutter-apk/app-debug.apk
+          fi
+          SIZE=$(du -sh "$APK" | cut -f1)
+          echo "APK size: $SIZE"
+          echo "### APK Build Result" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| $(basename $APK) | $SIZE |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: labpilot-${{ github.ref_name }}-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: ignore
           retention-days: 30
